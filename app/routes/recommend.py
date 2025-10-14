@@ -10,7 +10,9 @@ router = APIRouter()
 @router.post("/recommend")
 async def recommend(request: Request):
     payload = await request.json()
-    activity = payload.get("activity", "office work")
+    activity = payload.get("activity", "general")
+    mood = payload.get("mood", "neutral")
+    follow_up = payload.get("follow_up")
 
     # 1️⃣ Detect location from request IP or frontend
     ip_address = request.client.host
@@ -21,22 +23,24 @@ async def recommend(request: Request):
     # 2️⃣ Fetch weather data
     weather = get_weather(city)
 
-    # 3️⃣ Get food suggestion from Edamam
-    food_info = get_food_suggestions(activity, city)
+    # 3️⃣ Get food suggestion based on mood
+    food_info = get_food_suggestions(mood, city)
 
-    # 4️⃣ AI reasoning with Bedrock
-    ai_suggestion = generate_recommendation(
-        city,
-        country,
-        weather["temperature"],
-        weather["condition"],
-        activity
-    )
+    # 4️⃣ AI reasoning with enhanced context
+    from services.agent_service import DailyRitualAgent
+    agent = DailyRitualAgent()
+    ai_suggestion = agent.generate_recommendation({
+        "location": f"{city}, {country}",
+        "weather": f"{weather['temperature']}°C, {weather['condition']}",
+        "mood": mood,
+        "activity": activity,
+        "follow_up": follow_up
+    })
 
-    # 5️⃣ Find nearby places (mocked)
+    # 5️⃣ Find nearby places
     nearby = find_nearby_places(city, food_info["food"])
 
-    # 6️⃣ Return response including detected location
+    # 6️⃣ Return response
     return {
         "detected_location": {
             "city": city,

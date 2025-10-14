@@ -1,7 +1,11 @@
 from core.config import Config
 from core.logger import setup_logger
+import boto3
 
 logger = setup_logger(__name__)
+
+# Setup AWS session with profile
+aws_session = Config.setup_aws_session()
 
 def generate_recommendation(city: str, country: str, temperature: float, weather: str, activity: str) -> str:
     """Generate AI recommendation with fallback logic."""
