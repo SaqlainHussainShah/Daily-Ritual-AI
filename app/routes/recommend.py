@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Request
-from app.services.weather_service import get_weather
-from app.services.food_service import get_food_suggestions
-from app.services.maps_service import find_nearby_places
-from app.services.ai_service import generate_recommendation
-from app.services.location_service import get_location_from_ip
+from services.weather_service import get_weather
+from services.food_service import get_food_suggestions
+from services.maps_service import find_nearby_places
+from services.ai_service import generate_recommendation
+from services.location_service import get_location_from_ip
 
 router = APIRouter()
 
@@ -48,4 +48,14 @@ async def recommend(request: Request):
         "food": food_info["food"],
         "calories": food_info["calories"],
         "nearby_places": nearby
+    }
+
+@router.get("/test-location")
+async def test_location(request: Request):
+    """Test endpoint to check location detection from IP."""
+    ip_address = request.client.host
+    location_data = get_location_from_ip(ip_address)
+    return {
+        "client_ip": ip_address,
+        "detected_location": location_data
     }

@@ -9,3 +9,7 @@ class Config:
     EDAMAM_APP_ID = os.getenv("EDAMAM_APP_ID")
     EDAMAM_APP_KEY = os.getenv("EDAMAM_APP_KEY")
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+    
+    # Strands configuration
+    STRANDS_API_KEY = os.getenv("STRANDS_API_KEY")
+    STRANDS_MODEL = os.getenv("STRANDS_MODEL", "gpt-4")
