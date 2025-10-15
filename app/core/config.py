@@ -27,3 +27,6 @@ class Config:
     # Strands configuration
     STRANDS_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("STRANDS_API_KEY")
     STRANDS_MODEL = os.getenv("STRANDS_MODEL", "gpt-4")
+    
+    # Bedrock model configuration
+    BEDROCK_MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"

@@ -26,6 +26,10 @@ async def test_location_direct(request: Request):
 def root():
     return {"message": "Daily Ritual AI backend is live."}
 
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 # Optional: For gunicorn or uvicorn command
 if __name__ == "__main__":
     import uvicorn

@@ -1,0 +1,9 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/Daily-Ritual-AI/FileContentIndex
+/.vs/Daily-Ritual-AI/v17
+/.vs
+/app/.vscode
+*.pyc

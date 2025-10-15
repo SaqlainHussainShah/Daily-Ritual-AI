@@ -23,10 +23,12 @@ class DailyRitualAgent:
             os.environ["AWS_DEFAULT_REGION"] = Config.REGION
             os.environ["AWS_PROFILE"] = Config.AWS_PROFILE
             
-            # Check Agent constructor parameters
+            # Configure Strands model via environment variable
+            os.environ["STRANDS_LLM"] = f"bedrock/{Config.BEDROCK_MODEL_ID}"
+            
             try:
-                # Try simple initialization first
                 self.agent = Agent()
+                print(f"✅ Strands Agent configured with model: {Config.BEDROCK_MODEL_ID}")
                 print(f"Agent methods: {[method for method in dir(self.agent) if not method.startswith('_')]}")
             except Exception as e:
                 print(f"Agent initialization error: {e}")
