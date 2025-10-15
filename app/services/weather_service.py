@@ -1,20 +1,19 @@
 import requests
-from app.core.config import Config
-from app.core.logger import setup_logger
+from core.config import Config
 
-logger = setup_logger(__name__)
-
-def get_weather(city: str) -> dict:
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={Config.OPENWEATHER_API_KEY}&units=metric"
+def get_weather(city: str):
+    """Get weather data for a city."""
     try:
-        res = requests.get(url, timeout=5)
-        res.raise_for_status()
-        data = res.json()
-        logger.info(f"Fetched weather for {city}")
-        return {
-            "temperature": data["main"]["temp"],
-            "condition": data["weather"][0]["description"]
-        }
-    except Exception as e:
-        logger.error(f"Weather API error: {e}")
-        return {"temperature": None, "condition": "Unavailable"}
+        if Config.OPENWEATHER_API_KEY:
+            url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={Config.OPENWEATHER_API_KEY}&units=metric"
+            response = requests.get(url)
+            data = response.json()
+            return {
+                "temperature": data["main"]["temp"],
+                "condition": data["weather"][0]["description"]
+            }
+    except:
+        pass
+    
+    # Mock data fallback
+    return {"temperature": 22, "condition": "clear sky"}

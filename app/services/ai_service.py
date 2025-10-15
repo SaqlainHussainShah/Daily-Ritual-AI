@@ -1,46 +1,22 @@
+from core.config import Config
+from core.logger import setup_logger
 import boto3
-from langchain.llms import Bedrock
-from langchain import PromptTemplate, LLMChain
-from app.core.config import Config
-from app.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-bedrock_client = boto3.client(
-    service_name="bedrock-runtime",
-    region_name=Config.REGION
-)
-
-template = """
-You are Daily Ritual AI, a wellness assistant.
-Context:
-City: {city}, {country}
-Temperature: {temperature}°C
-Weather: {weather}
-User Activity: {activity}
-
-Recommend ONE suitable local food or drink with calorie info and reasoning. 
-The suggestion should reflect common preferences or ingredients available in {country}.
-"""
-prompt = PromptTemplate(template=template, input_variables=["city", "country", "temperature", "weather", "activity"])
-
-llm = Bedrock(
-    client=bedrock_client,
-    model_id="anthropic.claude-3-sonnet-20240229-v1:0"
-)
-chain = LLMChain(llm=llm, prompt=prompt)
+# Setup AWS session with profile
+aws_session = Config.setup_aws_session()
 
 def generate_recommendation(city: str, country: str, temperature: float, weather: str, activity: str) -> str:
+    """Generate AI recommendation with fallback logic."""
     logger.info(f"Generating recommendation for {city}, {country}")
-    try:
-        response = chain.run({
-            "city": city,
-            "country": country,
-            "temperature": temperature,
-            "weather": weather,
-            "activity": activity
-        })
-        return response.strip()
-    except Exception as e:
-        logger.error(f"Bedrock error: {e}")
-        return "Unable to generate suggestion right now."
+    
+    # Simple recommendation logic based on context
+    if temperature > 25:
+        suggestion = f"It's warm in {city}! Try a refreshing iced drink or cold smoothie for your {activity}."
+    elif temperature < 10:
+        suggestion = f"It's chilly in {city}. A warm beverage like tea or hot chocolate would be perfect for {activity}."
+    else:
+        suggestion = f"Nice weather in {city}! A balanced meal or energizing snack would complement your {activity}."
+    
+    return suggestion

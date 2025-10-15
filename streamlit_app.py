@@ -1,0 +1,225 @@
+import streamlit as st
+import requests
+import json
+
+# Configure page
+st.set_page_config(
+    page_title="Daily Ritual AI",
+    page_icon="🌟",
+    layout="wide"
+)
+
+# Backend URL
+BACKEND_URL = "http://localhost:8080"
+
+def get_location_and_weather():
+    """Get user's location and weather info"""
+    try:
+        response = requests.get(f"{BACKEND_URL}/test-location")
+        if response.status_code == 200:
+            data = response.json()
+            location = data.get("detected_location", {})
+            
+            return {
+                "city": location.get("city", "your city"),
+                "country": location.get("country", "Unknown"),
+                "temperature": 22,  # Will be enhanced with actual weather API
+                "condition": "pleasant"
+            }
+    except:
+        pass
+    return {"city": "your city", "country": "Unknown", "temperature": 22, "condition": "pleasant"}
+
+def get_recommendation(mood, custom_mood=None, follow_up=None):
+    """Call backend recommendation endpoint"""
+    try:
+        user_mood = custom_mood if custom_mood else mood
+        payload = {"activity": "general", "mood": user_mood}
+        
+        if follow_up:
+            payload["follow_up"] = follow_up
+        
+        response = requests.post(f"{BACKEND_URL}/api/recommend", json=payload)
+        return response.json() if response.status_code == 200 else None
+    except:
+        return None
+
+# Initialize session state
+if 'location_data' not in st.session_state:
+    st.session_state.location_data = get_location_and_weather()
+
+if 'conversation_history' not in st.session_state:
+    st.session_state.conversation_history = []
+
+if 'current_mood' not in st.session_state:
+    st.session_state.current_mood = None
+
+if 'show_initial_form' not in st.session_state:
+    st.session_state.show_initial_form = True
+
+if 'processing_request' not in st.session_state:
+    st.session_state.processing_request = False
+
+if 'last_action' not in st.session_state:
+    st.session_state.last_action = None
+
+if 'question_submitted' not in st.session_state:
+    st.session_state.question_submitted = False
+
+# Main UI
+st.title("🌟 Daily Ritual AI")
+
+# Personalized greeting
+location = st.session_state.location_data
+temp = location['temperature']
+temp_desc = "hot" if temp > 25 else "cold" if temp < 15 else "pleasant"
+city = location['city']
+
+st.markdown(f"### Hi there! It's {temp_desc} ({temp}°C) in {city}. How are you feeling today?")
+
+# Initial mood selection (only show if not set or user wants to reset)
+if st.session_state.show_initial_form:
+    mood_options = [
+        "😊 Happy", "😴 Tired", "😰 Stressed", "💪 Energetic", 
+        "😔 Sad", "🤔 Thoughtful", "😌 Calm", "🔥 Motivated"
+    ]
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        selected_mood = st.selectbox("Choose your mood:", ["Select a mood..."] + mood_options)
+
+    with col2:
+        custom_mood = st.text_input("Or describe your feeling:", placeholder="e.g., anxious, excited...")
+
+    # Get initial recommendation
+    if st.button("Get My Personalized Ritual", type="primary"):
+        if selected_mood != "Select a mood..." or custom_mood:
+            st.session_state.current_mood = custom_mood if custom_mood else selected_mood
+            st.session_state.show_initial_form = False
+            
+            with st.spinner("Creating your personalized ritual..."):
+                result = get_recommendation(selected_mood, custom_mood)
+                
+                if result:
+                    st.session_state.conversation_history.append({
+                        "type": "recommendation",
+                        "content": result,
+                        "mood": st.session_state.current_mood
+                    })
+                    st.rerun()
+        else:
+            st.warning("Please select a mood or describe how you're feeling!")
+
+# Show conversation history and continue interaction
+if not st.session_state.show_initial_form and st.session_state.conversation_history:
+    st.markdown("---")
+    
+    # Display conversation history first
+    st.markdown("### 💬 Your Conversation")
+    for i, entry in enumerate(st.session_state.conversation_history):
+        if entry["type"] == "recommendation":
+            st.success("✨ Your Personalized Ritual")
+            st.markdown(f"**Based on feeling: {entry['mood']}**")
+            st.markdown(entry["content"].get("ai_suggestion", "No suggestion available"))
+            st.markdown("")
+        
+        elif entry["type"] == "follow_up":
+            st.info(f"**You asked:** {entry['question']}")
+            st.markdown(entry["response"])
+            st.markdown("")
+    
+    # Add some space before action panel
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Action panel at the bottom
+    with st.container():
+        st.markdown("### 🚀 What would you like to do next?")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            change_mood = st.button("🔄 Change My Mood", use_container_width=True, key="change_mood_btn")
+        
+        with col2:
+            new_suggestion = st.button("🔄 Get New Suggestion", use_container_width=True, key="new_suggestion_btn")
+        
+        with col3:
+            satisfied = st.button("✅ I'm Satisfied", use_container_width=True, key="satisfied_btn")
+        
+        st.markdown("---")
+        
+        # Ask follow-up questions
+        st.markdown("### ❓ Ask a Question")
+        
+        with st.form("question_form", clear_on_submit=True):
+            follow_up_question = st.text_input("Ask anything about your ritual or request modifications:", 
+                                             placeholder="e.g., Can you suggest something healthier? What if it rains?")
+            
+            submitted = st.form_submit_button("💬 Ask Question", use_container_width=True)
+    
+    # Handle actions outside the UI rendering
+    if change_mood:
+        st.session_state.show_initial_form = True
+        st.session_state.current_mood = None
+        st.rerun()
+    
+    if new_suggestion and not st.session_state.processing_request:
+        st.session_state.processing_request = True
+        result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood)
+        if result:
+            st.session_state.conversation_history.append({
+                "type": "recommendation",
+                "content": result,
+                "mood": st.session_state.current_mood
+            })
+        st.session_state.processing_request = False
+        st.rerun()
+    
+    if satisfied:
+        st.balloons()
+        st.success("Great! Have a wonderful day! 🌟")
+    
+    if submitted and follow_up_question:
+        # Show immediate feedback
+        st.info(f"**You asked:** {follow_up_question}")
+        
+        # Show loading spinner
+        with st.spinner("🤔 Thinking about your question..."):
+            result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood, follow_up_question)
+        
+        if result:
+            st.session_state.conversation_history.append({
+                "type": "follow_up",
+                "question": follow_up_question,
+                "response": result.get("ai_suggestion", "I'd be happy to help with that!")
+            })
+            # Show the response immediately
+            st.success("💡 Here's my answer:")
+            st.markdown(result.get("ai_suggestion", "I'd be happy to help with that!"))
+        else:
+            st.error("Sorry, I couldn't process your question. Please try again.")
+
+# Sidebar with info
+with st.sidebar:
+    st.markdown("### ℹ️ About")
+    st.write("Daily Ritual AI provides personalized recommendations based on:")
+    st.write("• Your location & weather")
+    st.write("• Your current mood")
+    st.write("• AI-powered insights")
+    
+    if st.session_state.conversation_history:
+        st.markdown("### 📝 Session Summary")
+        st.write(f"Current mood: {st.session_state.current_mood}")
+        st.write(f"Interactions: {len(st.session_state.conversation_history)}")
+    
+    st.markdown("### 🔧 Backend Status")
+    try:
+        response = requests.get(f"{BACKEND_URL}/")
+        if response.status_code == 200:
+            st.success("✅ Backend Connected")
+        else:
+            st.error("❌ Backend Error")
+    except:
+        st.error("❌ Backend Offline")
+        st.write("Start backend with: `uvicorn app.main:app --reload`")

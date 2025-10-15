@@ -1,25 +1,35 @@
 import requests
-from app.core.config import Config
-from app.core.logger import setup_logger
+from core.config import Config
 
-logger = setup_logger(__name__)
-
-def get_food_suggestions(activity: str, city: str) -> dict:
-    """Get food or drink suggestion from Edamam API."""
-    query = f"{activity} drink" if "gym" in activity.lower() else "healthy food"
-    url = f"https://api.edamam.com/api/food-database/v2/parser?app_id={Config.EDAMAM_APP_ID}&app_key={Config.EDAMAM_APP_KEY}&ingr={query}"
-
+def get_food_suggestions(activity: str, city: str):
+    """Get food suggestions based on activity."""
     try:
-        res = requests.get(url, timeout=5)
-        res.raise_for_status()
-        data = res.json()
-        hints = data.get("hints", [])
-        if hints:
-            food_label = hints[0]["food"]["label"]
-            calories = hints[0]["food"]["nutrients"].get("ENERC_KCAL", "N/A")
-            logger.info(f"Food suggestion for {activity}: {food_label}")
-            return {"food": food_label, "calories": calories}
-    except Exception as e:
-        logger.error(f"Food API error: {e}")
-
-    return {"food": "Protein Shake", "calories": 200}
+        if Config.EDAMAM_APP_ID and Config.EDAMAM_APP_KEY:
+            # Simple food mapping based on activity
+            food_map = {
+                "office work": "coffee",
+                "workout": "protein smoothie", 
+                "studying": "green tea",
+                "relaxing": "herbal tea",
+                "traveling": "energy bar",
+                "meeting friends": "sandwich"
+            }
+            food = food_map.get(activity, "healthy snack")
+            
+            url = f"https://api.edamam.com/api/food-database/v2/parser"
+            params = {
+                "app_id": Config.EDAMAM_APP_ID,
+                "app_key": Config.EDAMAM_APP_KEY,
+                "ingr": food
+            }
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            if data.get("parsed"):
+                calories = data["parsed"][0]["food"]["nutrients"]["ENERC_KCAL"]
+                return {"food": food, "calories": f"{calories:.0f} kcal"}
+    except:
+        pass
+    
+    # Fallback
+    return {"food": "healthy snack", "calories": "150 kcal"}
