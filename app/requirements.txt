@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+requests
+boto3
+langchain
+langchain-aws
+python-dotenv
+pydantic
+geopy
