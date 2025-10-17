@@ -14,14 +14,18 @@ class DailyRitualAgent:
     def __init__(self):
         if STRANDS_AVAILABLE:
             # Setup AWS credentials and environment
-            Config.setup_aws_session()
-            Config.setup_environment()
-            
-            try:
-                self.agent = Agent()
-                print(f"✅ Strands Agent with {Config.BEDROCK_MODEL_ID} initialized")
-            except Exception as e:
-                print(f"Strands init error: {e}")
+            aws_session = Config.setup_aws_session()
+            if aws_session:
+                Config.setup_environment()
+                
+                try:
+                    self.agent = Agent()
+                    print(f"✅ Strands Agent with {Config.BEDROCK_MODEL_ID} initialized")
+                except Exception as e:
+                    print(f"Strands init error: {e}")
+                    self.agent = None
+            else:
+                print("⚠️ AWS not available, using fallback mode")
                 self.agent = None
         else:
             self.agent = None
@@ -244,4 +248,4 @@ def application():
 
 if __name__ == '__main__':
     # Development server
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    flask_app.run(host='0.0.0.0', port=8000)

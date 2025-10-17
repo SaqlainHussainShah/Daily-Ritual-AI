@@ -3,7 +3,7 @@ import boto3
 
 class Config:
     # AWS Configuration
-    AWS_PROFILE = "Hackathon AI"
+    AWS_PROFILE = "default"
     AWS_REGION = "us-east-1"
     
     # Bedrock model configuration
@@ -19,10 +19,10 @@ class Config:
             session = boto3.Session(profile_name=cls.AWS_PROFILE)
             print(f"✅ AWS profile '{cls.AWS_PROFILE}' loaded")
             return session
-        except Exception:
-            session = boto3.Session()
-            print("⚠️ Using default AWS credentials")
-            return session
+        except Exception as e:
+            print(f"⚠️ AWS credentials error: {e}")
+            print("⚠️ Disabling AWS features")
+            return None
     
     @classmethod
     def setup_environment(cls):
