@@ -31,6 +31,26 @@ class SimpleRitualAgent:
         else:
             self.agent = None
     
+    def answer_question(self, question, mood, location, weather):
+        """Answer user's follow-up question"""
+        if self.agent:
+            prompt = f"""User is feeling {mood} in {location} with {weather} weather.
+            
+            They asked: "{question}"
+            
+            Provide a helpful, personalized answer related to daily rituals, wellness, activities, food, or lifestyle suggestions. Keep it conversational and under 100 words."""
+            
+            try:
+                if hasattr(self.agent, 'run'):
+                    result = self.agent.run(prompt)
+                else:
+                    result = str(self.agent(prompt))
+                return str(result)
+            except Exception as e:
+                print(f"AI error: {e}")
+        
+        return "I'd be happy to help with that! Could you be more specific about what you'd like to know?"
+    
     def generate_recommendation(self, mood, location, weather, force_new=False):
         # Create cache key
         cache_key = f"{mood}_{location}_{weather}"
@@ -135,6 +155,7 @@ def recommend():
     data = request.get_json() or {}
     mood = data.get("mood", "neutral")
     force_new = data.get("force_new", False)
+    follow_up = data.get("follow_up")
     
     location_data = get_location().get_json()
     weather_data = get_weather().get_json()
@@ -142,13 +163,20 @@ def recommend():
     location_str = f"{location_data['city']}, {location_data['country']}"
     weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
     
-    # Use AI agent for recommendation
-    suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
-    
-    return jsonify({
-        "ai_suggestion": suggestion,
-        "detected_location": {"city": location_data["city"], "country": location_data["country"]}
-    })
+    if follow_up:
+        # Handle follow-up questions
+        suggestion = ritual_agent.answer_question(follow_up, mood, location_str, weather_str)
+        return jsonify({
+            "ai_response": suggestion,
+            "detected_location": {"city": location_data["city"], "country": location_data["country"]}
+        })
+    else:
+        # Use AI agent for recommendation
+        suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
+        return jsonify({
+            "ai_suggestion": suggestion,
+            "detected_location": {"city": location_data["city"], "country": location_data["country"]}
+        })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
