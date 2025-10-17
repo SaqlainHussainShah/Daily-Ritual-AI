@@ -1,6 +1,32 @@
 import streamlit as st
 import requests
 import json
+import threading
+import time
+import socket
+
+# Backend startup code
+def is_port_open(port):
+    """Check if port is already in use"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+def start_backend():
+    """Start Flask backend in background thread"""
+    if not is_port_open(8000):
+        print("🚀 Starting Flask backend on port 8000...")
+        from ritual_agent import app
+        app.run(host='0.0.0.0', port=8000, use_reloader=False)
+    else:
+        print("✅ Backend already running on port 8000")
+
+# Start backend automatically when Streamlit loads
+if 'backend_started' not in st.session_state:
+    st.session_state.backend_started = True
+    if not is_port_open(8000):
+        backend_thread = threading.Thread(target=start_backend, daemon=True)
+        backend_thread.start()
+        time.sleep(3)  # Wait for backend to start
 
 # Configure page
 st.set_page_config(
@@ -28,16 +54,25 @@ def get_location_and_weather():
         pass
     return {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
 
-def get_recommendation(mood, custom_mood=None, follow_up=None):
+def get_recommendation(mood, custom_mood=None, follow_up=None, force_new=False):
     """Call backend recommendation endpoint"""
     try:
         user_mood = custom_mood if custom_mood else mood
-        payload = {"activity": "general", "mood": user_mood}
+        payload = {"activity": "general", "mood": user_mood, "force_new": force_new}
         
         if follow_up:
             payload["follow_up"] = follow_up
         
         response = requests.post(f"{BACKEND_URL}/api/recommend", json=payload)
+        return response.json() if response.status_code == 200 else None
+    except:
+        return None
+
+def ask_question(question):
+    """Call backend ask endpoint for direct questions"""
+    try:
+        payload = {"question": question}
+        response = requests.post(f"{BACKEND_URL}/api/ask", json=payload)
         return response.json() if response.status_code == 200 else None
     except:
         return None
@@ -126,7 +161,7 @@ if not st.session_state.show_initial_form and st.session_state.conversation_hist
             st.info(f"**You asked:** {entry['question']}")
             st.markdown(entry["response"])
             st.markdown("")
-    
+
     # Add some space before action panel
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -162,17 +197,20 @@ if not st.session_state.show_initial_form and st.session_state.conversation_hist
         st.session_state.current_mood = None
         st.rerun()
     
-    if new_suggestion and not st.session_state.processing_request:
-        st.session_state.processing_request = True
-        result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood)
-        if result:
-            st.session_state.conversation_history.append({
-                "type": "recommendation",
-                "content": result,
-                "mood": st.session_state.current_mood
-            })
-        st.session_state.processing_request = False
-        st.rerun()
+    if new_suggestion:
+        if st.session_state.last_action != 'new_suggestion':
+            st.session_state.last_action = 'new_suggestion'
+            with st.spinner("Getting a fresh suggestion..."):
+                result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood, force_new=True)
+                if result:
+                    st.session_state.conversation_history.append({
+                        "type": "recommendation",
+                        "content": result,
+                        "mood": st.session_state.current_mood
+                    })
+            st.rerun()
+    else:
+        st.session_state.last_action = None
     
     if satisfied:
         st.balloons()
@@ -184,17 +222,18 @@ if not st.session_state.show_initial_form and st.session_state.conversation_hist
         
         # Show loading spinner
         with st.spinner("🤔 Thinking about your question..."):
-            result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood, follow_up_question)
+            result = ask_question(follow_up_question)
         
         if result:
+            response_text = result.get("answer", "I'd be happy to help with that!")
             st.session_state.conversation_history.append({
                 "type": "follow_up",
                 "question": follow_up_question,
-                "response": result.get("ai_suggestion", "I'd be happy to help with that!")
+                "response": response_text
             })
             # Show the response immediately
             st.success("💡 Here's my answer:")
-            st.markdown(result.get("ai_suggestion", "I'd be happy to help with that!"))
+            st.markdown(response_text)
         else:
             st.error("Sorry, I couldn't process your question. Please try again.")
 
@@ -220,4 +259,4 @@ with st.sidebar:
             st.error("❌ Backend Error")
     except:
         st.error("❌ Backend Offline")
-        st.write("Start backend with: `uvicorn app.main:app --reload`")
+        st.write("Backend will start automatically...")
