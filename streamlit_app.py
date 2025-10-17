@@ -10,25 +10,23 @@ st.set_page_config(
 )
 
 # Backend URL
-BACKEND_URL = "http://localhost:8080"
+BACKEND_URL = "http://localhost:8000"
 
 def get_location_and_weather():
     """Get user's location and weather info"""
     try:
-        response = requests.get(f"{BACKEND_URL}/test-location")
+        response = requests.get(f"{BACKEND_URL}/weather")
         if response.status_code == 200:
             data = response.json()
-            location = data.get("detected_location", {})
-            
             return {
-                "city": location.get("city", "your city"),
-                "country": location.get("country", "Unknown"),
-                "temperature": 22,  # Will be enhanced with actual weather API
-                "condition": "pleasant"
+                "city": data.get("city", "New York"),
+                "country": data.get("country", "United States"),
+                "temperature": data.get("temperature", 22),
+                "condition": data.get("condition", "pleasant")
             }
     except:
         pass
-    return {"city": "your city", "country": "Unknown", "temperature": 22, "condition": "pleasant"}
+    return {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
 
 def get_recommendation(mood, custom_mood=None, follow_up=None):
     """Call backend recommendation endpoint"""
