@@ -9,7 +9,7 @@ class Config:
     BEDROCK_MODEL_ID = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
     
     # OpenWeather API
-    OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "5de0650c2a6fd75c5f27efcba7264c54")
+    OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "") # Provide API key here
     
     @classmethod
     def setup_aws_session(cls):
