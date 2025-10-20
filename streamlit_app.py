@@ -15,7 +15,7 @@ def start_backend():
     """Start Flask backend in background thread"""
     if not is_port_open(8000):
         print("🚀 Starting Flask backend on port 8000...")
-        from ritual_agent import app
+        from agent.ritual_agent import app
         app.run(host='0.0.0.0', port=8000, use_reloader=False)
     else:
         print("✅ Backend already running on port 8000")

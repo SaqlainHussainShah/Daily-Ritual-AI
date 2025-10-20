@@ -91,3 +91,58 @@ class RitualAgent:
         except Exception as e:
             print(f"Error while calling LLM: {type(e).__name__}")            
             return "Error while connecting to LLM."
+
+# Flask app setup
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+ritual_agent = RitualAgent()
+
+@app.route('/')
+def root():
+    return jsonify({"message": "Daily Ritual AI backend is live."})
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "healthy"})
+
+@app.route('/location')
+def location():
+    return jsonify(get_location())
+
+@app.route('/weather')
+def weather():
+    return jsonify(get_weather())
+
+@app.route('/api/recommend', methods=['POST'])
+def recommend():
+    data = request.get_json() or {}
+    mood = data.get("mood", "neutral")
+    force_new = data.get("force_new", False)
+    
+    location_data = get_location()
+    weather_data = get_weather()
+    
+    location_str = f"{location_data['city']}, {location_data['country']}"
+    weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
+    
+    suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
+    
+    return jsonify({
+        "ai_suggestion": suggestion,
+        "detected_location": {"city": location_data["city"], "country": location_data["country"]}
+    })
+
+@app.route('/api/ask', methods=['POST'])
+def ask_question():
+    data = request.get_json() or {}
+    question = data.get("question", "")
+    
+    if not question:
+        return jsonify({"error": "Question is required"}), 400
+    
+    answer = ritual_agent.ask_direct_question(question)
+    return jsonify({"answer": answer})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000)
