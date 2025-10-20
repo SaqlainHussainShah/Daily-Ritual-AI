@@ -15,7 +15,7 @@ Example:
     from services import get_user_location, get_weather, get_food_recommendation
 """
 
-from .location_service import get_user_location
+from .location_service import get_location_from_ip
 from .weather_service import get_weather
 from .food_recommendation_service import get_food_recommendation
 from .agent_service import generate_ai_response

@@ -1,27 +1,33 @@
 import requests
-from app.core.logger import setup_logger
 
-logger = setup_logger(__name__)
-
-def get_location_from_ip(ip_address: str) -> dict:
-    """
-    Use IP geolocation API to get user's city/country.
-    """
+def get_location_from_ip(ip_address: str):
+    """Get location data from IP address."""
     try:
-        res = requests.get(f"https://ipapi.co/{ip_address}/json/", timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            city = data.get("city", "Unknown")
-            country = data.get("country_name", "Unknown")
-            latitude = data.get("latitude", 0.0)
-            longitude = data.get("longitude", 0.0)
-            logger.info(f"Detected location: {city}, {country}")
+        # For localhost, get real public IP
+        if not ip_address or ip_address == "127.0.0.1":
+            # Get public IP first
+            public_ip_response = requests.get("https://api.ipify.org")
+            ip_address = public_ip_response.text.strip()
+            print(f"Detected public IP: {ip_address}")  # Debug
+        
+        response = requests.get(f"http://ip-api.com/json/{ip_address}")
+        data = response.json()
+        print(f"API Response: {data}")  # Debug
+        
+        if data["status"] == "success":
             return {
-                "city": city,
-                "country": country,
-                "latitude": latitude,
-                "longitude": longitude
+                "city": data["city"],
+                "country": data["country"],
+                "latitude": data["lat"],
+                "longitude": data["lon"]
             }
     except Exception as e:
-        logger.error(f"IP Location lookup failed: {e}")
-    return {"city": "Unknown", "country": "Unknown", "latitude": 0.0, "longitude": 0.0}
+        print(f"Location error: {e}")  # Debug
+    
+    # Fallback for localhost/development
+    return {
+        "city": "New York",
+        "country": "United States", 
+        "latitude": 40.7128,
+        "longitude": -74.0060
+    }
