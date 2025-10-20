@@ -107,12 +107,22 @@ def health():
 
 @app.route('/location')
 def get_location():
-    """Get user's location from IP"""
+    """Get user's location from their IP"""
+    # Get user's IP from request headers (for users behind proxies/load balancers)
+    user_ip = request.headers.get('X-Forwarded-For', request.headers.get('X-Real-IP', request.remote_addr))
+    if user_ip:
+        user_ip = user_ip.split(',')[0].strip()  # Handle multiple IPs
+    
     try:
-        ip_response = requests.get("https://api.ipify.org", timeout=5)
-        ip_address = ip_response.text.strip()
+        # If we have a valid user IP, use it directly
+        if user_ip and user_ip != '127.0.0.1' and not user_ip.startswith('192.168.'):
+            location_response = requests.get(f"http://ip-api.com/json/{user_ip}", timeout=5)
+        else:
+            # Fallback: get public IP first, then location
+            ip_response = requests.get("https://api.ipify.org", timeout=5)
+            public_ip = ip_response.text.strip()
+            location_response = requests.get(f"http://ip-api.com/json/{public_ip}", timeout=5)
         
-        location_response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=5)
         if location_response.status_code == 200:
             data = location_response.json()
             if data["status"] == "success":
