@@ -8,10 +8,10 @@ Build an AI-powered wellness recommendation system that delivers **personalized 
 
 | Team Member Name | Email | Module |
 |------------------|-------|---------|
-| Development Team | team@dailyritual.ai | Full Stack Development |
-| AI/ML Engineer | ai@dailyritual.ai | AI Service Integration |
-| Backend Developer | backend@dailyritual.ai | API Development & Services |
-| DevOps Engineer | devops@dailyritual.ai | Infrastructure & Deployment |
+| Adnan Ahmed | adnan.ahmed@northbaysolutions.net  | Full Stack Development |
+| Humza Munir | humza.munir@northbaysolutions.net  | AI Service Integration |
+| Shawana Faz | shawana.faz@northbaysolutions.net | API Development & Services |
+| Saqlain Shah | saqlain.shah@northbaysolutions.net| Infrastructure & Deployment |
 
 ## Use Case Description
 
