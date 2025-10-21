@@ -4,7 +4,6 @@ import json
 import threading
 import time
 import socket
-from streamlit_geolocation import streamlit_geolocation
 
 # Backend startup code
 def is_port_open(port):
@@ -17,7 +16,7 @@ def start_backend():
     if not is_port_open(8000):
         print("🚀 Starting Flask backend on port 8000...")
         from agent.ritual_agent import app
-        app.run(host='0.0.0.0', port=8000, use_reloader=False)
+        app.run(host='0.0.0.0', port=8000)
     else:
         print("✅ Backend already running on port 8000")
 
@@ -41,20 +40,18 @@ BACKEND_URL = "http://localhost:8000"
 
 def get_location_and_weather():
     """Get user's location and weather info"""
-    # Check if location is already detected
-    if 'user_location' in st.session_state:
-        try:
-            response = requests.get(f"{BACKEND_URL}/weather")
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "city": data.get("city", "New York"),
-                    "country": data.get("country", "United States"),
-                    "temperature": data.get("temperature", 22),
-                    "condition": data.get("condition", "pleasant")
-                }
-        except:
-            pass
+    try:
+        response = requests.get(f"{BACKEND_URL}/weather")
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "city": data.get("city", "New York"),
+                "country": data.get("country", "United States"),
+                "temperature": data.get("temperature", 22),
+                "condition": data.get("condition", "pleasant")
+            }
+    except:
+        pass
     return {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
 
 def get_recommendation(mood, custom_mood=None, follow_up=None, force_new=False):
@@ -102,83 +99,30 @@ if 'last_action' not in st.session_state:
 if 'question_submitted' not in st.session_state:
     st.session_state.question_submitted = False
 
-if 'location_enabled' not in st.session_state:
-    st.session_state.location_enabled = False
 
-if 'gps_requested' not in st.session_state:
-    st.session_state.gps_requested = False
 
 # Main UI
 st.title("🌟 Daily Ritual AI")
 
-# Location setup section
-if not st.session_state.location_enabled:
-    st.info("📍 **Enable location for personalized recommendations based on your exact weather and surroundings!**")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**🌍 GPS Location (Recommended)**")
-        st.caption("Most accurate weather and suggestions")
-        
-        if st.button("🌍 Enable GPS Location", use_container_width=True, type="primary"):
-            st.session_state.gps_requested = True
-        
-        # Handle GPS after button click
-        if st.session_state.gps_requested:
-            location = streamlit_geolocation()
-            
-            if location and location.get('latitude'):
-                # GPS location detected, send to backend
-                try:
-                    response = requests.post(f"{BACKEND_URL}/set_location", json={
-                        "latitude": location['latitude'],
-                        "longitude": location['longitude'],
-                        "method": "gps"
-                    })
-                    if response.status_code == 200:
-                        st.session_state.location_enabled = True
-                        st.session_state.user_location = location
-                        st.session_state.gps_requested = False
-                        st.success("✅ GPS location enabled!")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Error setting GPS location: {e}")
-                    st.session_state.gps_requested = False
-            else:
-                st.markdown("👆 **Click the GPS icon above to enable location** →")
-                st.info("📍 Waiting for GPS permission...")
-    
-    with col2:
-        st.markdown("**⚡ Quick Start**")
-        st.caption("Use approximate location (no permissions)")
-        
-        if st.button("⚡ Use IP Location", use_container_width=True):
-            # Use IP-based location
-            try:
-                response = requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip"})
-                if response.status_code == 200:
-                    st.session_state.location_enabled = True
-                    st.info("📍 Using IP-based location")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error setting IP location: {e}")
+# Initialize location automatically using IP
+try:
+    requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip"})
+except:
+    pass
 
-# Only show main app if location is enabled
-if st.session_state.location_enabled:
-    # Refresh location data
-    st.session_state.location_data = get_location_and_weather()
+# Refresh location data
+st.session_state.location_data = get_location_and_weather()
     
-    # Personalized greeting
-    location = st.session_state.location_data
-    temp = location['temperature']
-    temp_desc = "hot" if temp > 25 else "cold" if temp < 15 else "pleasant"
-    city = location['city']
+# Personalized greeting
+location = st.session_state.location_data
+temp = location['temperature']
+temp_desc = "hot" if temp > 25 else "cold" if temp < 15 else "pleasant"
+city = location['city']
 
-    st.markdown(f"### Hi there! It's {temp_desc} ({temp}°C) in {city}. How are you feeling today?")
+st.markdown(f"### Hi there! It's {temp_desc} ({temp}°C) in {city}. How are you feeling today?")
 
-    # Initial mood selection (only show if not set or user wants to reset)
-    if st.session_state.show_initial_form:
+# Initial mood selection (only show if not set or user wants to reset)
+if st.session_state.show_initial_form:
         mood_options = [
             "😊 Happy", "😴 Tired", "😰 Stressed", "💪 Energetic", 
             "😔 Sad", "🤔 Thoughtful", "😌 Calm", "🔥 Motivated"
@@ -211,8 +155,8 @@ if st.session_state.location_enabled:
             else:
                 st.warning("Please select a mood or describe how you're feeling!")
 
-    # Show conversation history and continue interaction
-    if not st.session_state.show_initial_form and st.session_state.conversation_history:
+# Show conversation history and continue interaction
+if not st.session_state.show_initial_form and st.session_state.conversation_history:
         st.markdown("---")
         
         # Display conversation history first

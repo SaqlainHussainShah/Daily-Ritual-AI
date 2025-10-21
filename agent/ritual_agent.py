@@ -12,8 +12,6 @@ from config import Config
 from strands.models.bedrock import BedrockModel
 from tools.location_tool import get_location
 from tools.weather_tool import get_weather
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderServiceError
 import requests
 
 try:
@@ -98,47 +96,7 @@ class RitualAgent:
 # Location storage
 current_location = {"method": "ip", "data": None}
 
-def get_location_from_gps(latitude, longitude):
-    """Get location from GPS coordinates"""
-    try:
-        geolocator = Nominatim(user_agent="daily-ritual-ai")
-        location = geolocator.reverse((latitude, longitude), timeout=10)
-        
-        if location:
-            addr = location.raw.get("address", {})
-            city = addr.get("city") or addr.get("town") or addr.get("village") or "Unknown"
-            country = addr.get("country") or "Unknown"
-            
-            return {
-                "city": city,
-                "country": country,
-                "latitude": latitude,
-                "longitude": longitude
-            }
-    except Exception as e:
-        print(f"GPS geocoding error: {e}")
-    return None
 
-def get_location_from_ip():
-    """Get location from IP address"""
-    try:
-        ip_response = requests.get("https://api.ipify.org", timeout=5)
-        ip_address = ip_response.text.strip()
-        
-        location_response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=5)
-        if location_response.status_code == 200:
-            data = location_response.json()
-            if data["status"] == "success":
-                return {
-                    "city": data["city"],
-                    "country": data["country"],
-                    "latitude": data["lat"],
-                    "longitude": data["lon"]
-                }
-    except Exception as e:
-        print(f"IP location error: {e}")
-    
-    return {"city": "New York", "country": "United States", "latitude": 40.7128, "longitude": -74.0060}
 
 # Flask app setup
 from flask import Flask, jsonify, request
@@ -156,23 +114,9 @@ def health():
 
 @app.route('/set_location', methods=['POST'])
 def set_location():
-    """Set user location via GPS or IP"""
+    """Set user location via IP"""
     global current_location
-    data = request.get_json() or {}
-    method = data.get("method", "ip")
-    
-    if method == "gps":
-        latitude = data.get("latitude")
-        longitude = data.get("longitude")
-        if latitude and longitude:
-            location_data = get_location_from_gps(latitude, longitude)
-            if location_data:
-                current_location = {"method": "gps", "data": location_data}
-                print(f"[GPS] Location set: {location_data['city']}, {location_data['country']}")
-                return jsonify({"status": "success", "method": "gps", "location": location_data})
-    
-    # Fallback to IP
-    location_data = get_location_from_ip()
+    location_data = get_location()
     current_location = {"method": "ip", "data": location_data}
     print(f"[IP] Location set: {location_data['city']}, {location_data['country']}")
     return jsonify({"status": "success", "method": "ip", "location": location_data})
@@ -182,12 +126,12 @@ def location():
     """Get current location"""
     if current_location["data"]:
         return jsonify(current_location["data"])
-    return jsonify(get_location_from_ip())
+    return jsonify(get_location())
 
 @app.route('/weather')
 def weather():
     """Get weather for current location"""
-    location_data = current_location["data"] if current_location["data"] else get_location_from_ip()
+    location_data = get_location()
     
     try:
         from config import Config
