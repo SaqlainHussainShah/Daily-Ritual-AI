@@ -126,28 +126,55 @@ if not st.session_state.location_enabled:
         
         # Handle GPS after button click
         if st.session_state.gps_requested:
-            location = streamlit_geolocation()
-            
-            if location and location.get('latitude'):
-                # GPS location detected, send to backend
+            try:
+                location = streamlit_geolocation()
+                print(f"GPS Location result: {location}")
+                
+                if location and location.get('latitude'):
+                    # GPS location detected, send to backend
+                    try:
+                        response = requests.post(f"{BACKEND_URL}/set_location", json={
+                            "latitude": location['latitude'],
+                            "longitude": location['longitude'],
+                            "method": "gps"
+                        })
+                        if response.status_code == 200:
+                            st.session_state.location_enabled = True
+                            st.session_state.user_location = location
+                            st.session_state.gps_requested = False
+                            st.success("✅ GPS location enabled!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error setting GPS location: {e}")
+                        st.session_state.gps_requested = False
+                elif location is None:
+                    st.markdown("👆 **Click the GPS icon above to enable location** →")
+                    st.info("📍 Waiting for GPS permission...")
+                else:
+                    # Location object exists but no coordinates - likely an error
+                    st.warning("⚠️ GPS not available on this device/browser. Using IP location instead.")
+                    try:
+                        response = requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip"})
+                        if response.status_code == 200:
+                            st.session_state.location_enabled = True
+                            st.session_state.gps_requested = False
+                            st.rerun()
+                    except:
+                        pass
+            except Exception as e:
+                print(f"GPS Exception: {e}")
+                # Handle GPS errors - likely browser/deployment issues
+                st.warning("⚠️ GPS not supported in this environment. Using IP-based location instead.")
+                # Automatically fallback to IP location
                 try:
-                    response = requests.post(f"{BACKEND_URL}/set_location", json={
-                        "latitude": location['latitude'],
-                        "longitude": location['longitude'],
-                        "method": "gps"
-                    })
+                    response = requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip"})
                     if response.status_code == 200:
                         st.session_state.location_enabled = True
-                        st.session_state.user_location = location
                         st.session_state.gps_requested = False
-                        st.success("✅ GPS location enabled!")
                         st.rerun()
-                except Exception as e:
-                    st.error(f"Error setting GPS location: {e}")
-                    st.session_state.gps_requested = False
-            else:
-                st.markdown("👆 **Click the GPS icon above to enable location** →")
-                st.info("📍 Waiting for GPS permission...")
+                except:
+                    pass
+                st.session_state.gps_requested = False
     
     with col2:
         st.markdown("**⚡ Quick Start**")
