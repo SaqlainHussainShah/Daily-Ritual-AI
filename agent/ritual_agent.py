@@ -40,58 +40,81 @@ class RitualAgent:
             self.agent = None
     
     def generate_recommendation(self, mood, location, weather, force_new=False):
+        """
+        Generate a personalized wellness recommendation based on mood, location, and weather.
+        Uses cached results if available unless force_new=True.
+        """
         cache_key = f"{mood}_{location}_{weather}"
-        
-        if self.agent:
-            prompt = f"""You are Daily Ritual AI, delivering smart, context-aware food and drink suggestions to enhance daily wellness.
+
+        # Use cache if available
+        if not force_new and cache_key in self.cache:
+            return self.cache[cache_key]
+
+        # Prepare the prompt with explicit context
+        prompt = f"""
+        You are Daily Ritual AI — an empathetic wellness assistant that provides 
+        personalized food, drink, and activity recommendations based on the user's mood,
+        location, and weather.
+
+        User mood: {mood}
+        User location: {location}
+        Current weather: {weather}
+
+        Now write a warm, encouraging response (under 150 words) that includes:
+        - A food suggestion suited to the mood and weather
+        - A drink recommendation that complements it
+        - A simple wellness or relaxation activity that fits the vibe
+
+        Keep the tone friendly, human, and context-aware.
+        """
+
+        try:
+            if self.agent:
+                if hasattr(self.agent, "run"):
+                    result = self.agent.run(prompt)
+                else:
+                    result = str(self.agent(prompt))
+            else:
+                # fallback to non-agent mode
+                result = self._fallback_recommendation(mood, location, weather)
+
+            # Cache and return
+            self.cache[cache_key] = str(result)
+            return str(result)
+
+        except Exception as e:
+            print(f"[generate_recommendation] AI error: {e}")
+            return self._fallback_recommendation(mood, location, weather)
+
+    def _fallback_recommendation(self, mood, location, weather):
+        """Local fallback recommendation if AI call fails."""
+        mood_lower = mood.lower()
+        if "happy" in mood_lower:
+            return f"Great energy in {location}! With {weather}, enjoy an energizing smoothie, outdoor walk, or a visit to a local park."
+        elif "tired" in mood_lower:
+            return f"Time to recharge in {location}. With {weather}, consider herbal tea, gentle stretching, or relaxing in a cozy café."
+        elif "stressed" in mood_lower:
+            return f"Find calm in {location}. With {weather}, try chamomile tea, deep breathing, or a quiet moment in a peaceful space."
+        else:
+            return f"Enjoy your day in {location}! With {weather}, a balanced meal, light walk, or mindful break would be perfect."
+
+    def ask_direct_question(self, question: str) -> str:
+            try:            
+                prompt = f"""You are Daily Ritual AI, specializing in smart, context-aware food and drink suggestions that enhance daily wellness through adaptive AI insights.
             
-            User is feeling: {mood}
+                Question: {question}
             
-            Use the get_location and get_weather tools to get current context, then provide personalized recommendations focusing on:
-            - Smart food suggestions tailored to mood and weather
-            - Drink recommendations that complement the conditions
-            - Brief wellness activities that pair with the food/drinks
+                Use the get_location and get_weather tools if needed for context. Provide practical advice focusing on food, drinks, and wellness habits. Keep response encouraging and under 150 words."""
             
-            Use adaptive AI insights to make suggestions feel contextually perfect. Keep response warm, encouraging, under 150 words."""
-            
-            try:
                 if hasattr(self.agent, 'run'):
                     result = self.agent.run(prompt)
                 else:
                     result = str(self.agent(prompt))
-                
-                self.cache[cache_key] = str(result)
                 return str(result)
+            
             except Exception as e:
-                print(f"AI error: {e}")
-        
-        # Fallback
-        if 'happy' in mood.lower():
-            return f"Great energy in {location}! With {weather}, try outdoor activities, energizing smoothie, or visit a local park."
-        elif 'tired' in mood.lower():
-            return f"Time to recharge in {location}. With {weather}, consider herbal tea, gentle stretching, or a cozy cafe."
-        elif 'stressed' in mood.lower():
-            return f"Find calm in {location}. With {weather}, try meditation, chamomile tea, or visit a peaceful library."
-        else:
-            return f"Nice day in {location}! With {weather}, a balanced meal, light walk, or local cafe visit sounds perfect."
-
-    def ask_direct_question(self, question: str) -> str:
-        try:            
-            prompt = f"""You are Daily Ritual AI, specializing in smart, context-aware food and drink suggestions that enhance daily wellness through adaptive AI insights.
-            
-            Question: {question}
-            
-            Use the get_location and get_weather tools if needed for context. Provide practical advice focusing on food, drinks, and wellness habits. Keep response encouraging and under 150 words."""
-            
-            if hasattr(self.agent, 'run'):
-                result = self.agent.run(prompt)
-            else:
-                result = str(self.agent(prompt))
-            return str(result)
-            
-        except Exception as e:
-            print(f"Error while calling LLM: {type(e).__name__}")            
-            return "Error while connecting to LLM."
+                print(f"Error while calling LLM: {type(e).__name__}")            
+                return "Error while connecting to LLM."
 
 # Location storage
 current_location = {"method": "ip", "data": None}
