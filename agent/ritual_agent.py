@@ -146,8 +146,9 @@ class RitualAgent:
         else:
             return base + "a balanced meal, hydration, and a short walk are always good choices."
 
-# Location storage
+# Location and weather storage
 current_location = {"method": "ip", "data": None}
+cached_weather = {"data": None, "timestamp": 0}
 
 
 
@@ -233,6 +234,7 @@ def recommend():
 
 @app.route('/api/ask', methods=['POST'])
 def ask_question():
+    global current_location
     data = request.get_json() or {}
     question = data.get("question", "")
     ip = data.get("ip")
@@ -240,17 +242,49 @@ def ask_question():
     if not question:
         return jsonify({"error": "Question is required"}), 400
 
-    # Use existing location if available, otherwise fallback
+    # Use stored location data to maintain consistency
     if current_location["data"] and current_location.get("user_ip") == ip:
         location_data = current_location["data"]
+        
+        # Use cached weather if available (cache for 10 minutes)
+        import time
+        current_time = time.time()
+        if cached_weather["data"] and (current_time - cached_weather["timestamp"]) < 600:
+            weather_data = cached_weather["data"]
+            print(f"[ASK] Using cached weather data")
+        else:
+            # Get fresh weather data
+            try:
+                api_key = Config.OPENWEATHER_API_KEY
+                if location_data.get("latitude") and location_data.get("longitude"):
+                    url = f"http://api.openweathermap.org/data/2.5/weather?lat={location_data['latitude']}&lon={location_data['longitude']}&appid={api_key}&units=metric"
+                else:
+                    url = f"http://api.openweathermap.org/data/2.5/weather?q={location_data['city']}&appid={api_key}&units=metric"
+                
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    weather_json = response.json()
+                    weather_data = {
+                        "temperature": round(weather_json["main"]["temp"], 1),
+                        "condition": weather_json["weather"][0]["description"]
+                    }
+                    # Cache the weather data
+                    cached_weather = {"data": weather_data, "timestamp": current_time}
+                    print(f"[ASK] Fetched fresh weather data")
+                else:
+                    weather_data = {"temperature": 22, "condition": "clear sky"}
+            except:
+                weather_data = {"temperature": 22, "condition": "clear sky"}
     else:
         location_data = get_location(ip)
-        current_location.update({"data": location_data, "user_ip": ip})
+        weather_data = get_weather(ip)
+        current_location = {"method": "ip", "data": location_data, "user_ip": ip}
 
-    weather_data = get_weather(ip)
     location_str = f"{location_data['city']}, {location_data['country']}"
     weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
 
+    print(f"[ASK] Using location: {location_str} for question: {question}")
+    
     answer = ritual_agent.ask_direct_question(question, location_str, weather_str)
     return jsonify({"answer": answer})
 
