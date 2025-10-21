@@ -45,17 +45,14 @@ class RitualAgent:
         if self.agent:
             prompt = f"""You are Daily Ritual AI, delivering smart, context-aware food and drink suggestions to enhance daily wellness.
             
-            User Context:
-            - Feeling: {mood}
-            - Location: {location}
-            - Weather: {weather}
+            User is feeling: {mood}
             
-            Provide personalized recommendations focusing on:
+            Use the get_location and get_weather tools to get current context, then provide personalized recommendations focusing on:
             - Smart food suggestions tailored to mood and weather
             - Drink recommendations that complement the conditions
             - Brief wellness activities that pair with the food/drinks
             
-            Use the provided location and weather context. Keep response warm, encouraging, under 150 words."""
+            Use adaptive AI insights to make suggestions feel contextually perfect. Keep response warm, encouraging, under 150 words."""
             
             try:
                 if hasattr(self.agent, 'run'):
@@ -78,17 +75,13 @@ class RitualAgent:
         else:
             return f"Nice day in {location}! With {weather}, a balanced meal, light walk, or local cafe visit sounds perfect."
 
-    def ask_direct_question(self, question: str, location: str = None, weather: str = None) -> str:
+    def ask_direct_question(self, question: str) -> str:
         try:            
-            context = ""
-            if location and weather:
-                context = f"\n\nUser Context:\n- Location: {location}\n- Weather: {weather}"
-            
             prompt = f"""You are Daily Ritual AI, specializing in smart, context-aware food and drink suggestions that enhance daily wellness through adaptive AI insights.
             
-            Question: {question}{context}
+            Question: {question}
             
-            Provide practical advice focusing on food, drinks, and wellness habits. Keep response encouraging and under 150 words."""
+            Use the get_location and get_weather tools if needed for context. Provide practical advice focusing on food, drinks, and wellness habits. Keep response encouraging and under 150 words."""
             
             if hasattr(self.agent, 'run'):
                 result = self.agent.run(prompt)
@@ -187,7 +180,6 @@ def recommend():
 
 @app.route('/api/ask', methods=['POST'])
 def ask_question():
-    global current_location
     data = request.get_json() or {}
     question = data.get("question", "")
     ip = data.get("ip")
@@ -195,16 +187,10 @@ def ask_question():
     if not question:
         return jsonify({"error": "Question is required"}), 400
     
-    # Get location context
-    if current_location["data"]:
-        location_data = current_location["data"]
-        weather_data = get_weather(ip)
-        location_str = f"{location_data['city']}, {location_data['country']}"
-        weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
-        answer = ritual_agent.ask_direct_question(question, location_str, weather_str)
-    else:
-        answer = ritual_agent.ask_direct_question(question)
+    if ip:
+        get_location(ip)
     
+    answer = ritual_agent.ask_direct_question(question)
     return jsonify({"answer": answer})
 
 if __name__ == '__main__':
