@@ -116,7 +116,9 @@ def health():
 def set_location():
     """Set user location via IP"""
     global current_location
-    location_data = get_location()
+    data = request.get_json() or {}
+    ip = data.get('ip')
+    location_data = get_location(ip)
     current_location = {"method": "ip", "data": location_data}
     print(f"[IP] Location set: {location_data['city']}, {location_data['country']}")
     return jsonify({"status": "success", "method": "ip", "location": location_data})
@@ -124,51 +126,26 @@ def set_location():
 @app.route('/location')
 def location():
     """Get current location"""
+    ip = request.args.get('ip')
     if current_location["data"]:
         return jsonify(current_location["data"])
-    return jsonify(get_location())
+    return jsonify(get_location(ip))
 
 @app.route('/weather')
 def weather():
     """Get weather for current location"""
-    location_data = get_location()
-    
-    try:
-        from config import Config
-        api_key = Config.OPENWEATHER_API_KEY
-        
-        if location_data.get("latitude") and location_data.get("longitude"):
-            url = f"http://api.openweathermap.org/data/2.5/weather?lat={location_data['latitude']}&lon={location_data['longitude']}&appid={api_key}&units=metric"
-        else:
-            url = f"http://api.openweathermap.org/data/2.5/weather?q={location_data['city']}&appid={api_key}&units=metric"
-        
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return jsonify({
-                "temperature": data["main"]["temp"],
-                "condition": data["weather"][0]["description"],
-                "city": location_data["city"],
-                "country": location_data["country"]
-            })
-    except Exception as e:
-        print(f"Weather error: {e}")
-    
-    return jsonify({
-        "temperature": 22, 
-        "condition": "clear sky", 
-        "city": location_data.get("city", "Unknown"), 
-        "country": location_data.get("country", "Unknown")
-    })
+    ip = request.args.get('ip')
+    return jsonify(get_weather(ip))
 
 @app.route('/api/recommend', methods=['POST'])
 def recommend():
     data = request.get_json() or {}
     mood = data.get("mood", "neutral")
     force_new = data.get("force_new", False)
+    ip = data.get("ip")
     
-    location_data = get_location()
-    weather_data = get_weather()
+    location_data = get_location(ip)
+    weather_data = get_weather(ip)
     
     location_str = f"{location_data['city']}, {location_data['country']}"
     weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
@@ -184,9 +161,13 @@ def recommend():
 def ask_question():
     data = request.get_json() or {}
     question = data.get("question", "")
+    ip = data.get("ip")
     
     if not question:
         return jsonify({"error": "Question is required"}), 400
+    
+    if ip:
+        get_location(ip)
     
     answer = ritual_agent.ask_direct_question(question)
     return jsonify({"answer": answer})

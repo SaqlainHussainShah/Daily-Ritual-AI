@@ -4,6 +4,7 @@ import json
 import threading
 import time
 import socket
+from streamlit_js_eval import get_user_agent, streamlit_js_eval
 
 # Backend startup code
 def is_port_open(port):
@@ -38,10 +39,13 @@ st.set_page_config(
 # Backend URL
 BACKEND_URL = "http://localhost:8000"
 
-def get_location_and_weather():
+def get_location_and_weather(ip=None):
     """Get user's location and weather info"""
     try:
-        response = requests.get(f"{BACKEND_URL}/weather")
+        url = f"{BACKEND_URL}/weather"
+        if ip:
+            url += f"?ip={ip}"
+        response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
             return {
@@ -54,7 +58,7 @@ def get_location_and_weather():
         pass
     return {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
 
-def get_recommendation(mood, custom_mood=None, follow_up=None, force_new=False):
+def get_recommendation(mood, custom_mood=None, follow_up=None, force_new=False, ip=None):
     """Call backend recommendation endpoint"""
     try:
         user_mood = custom_mood if custom_mood else mood
@@ -62,24 +66,35 @@ def get_recommendation(mood, custom_mood=None, follow_up=None, force_new=False):
         
         if follow_up:
             payload["follow_up"] = follow_up
+        if ip:
+            payload["ip"] = ip
         
         response = requests.post(f"{BACKEND_URL}/api/recommend", json=payload)
         return response.json() if response.status_code == 200 else None
     except:
         return None
 
-def ask_question(question):
+def ask_question(question, ip=None):
     """Call backend ask endpoint for direct questions"""
     try:
         payload = {"question": question}
+        if ip:
+            payload["ip"] = ip
         response = requests.post(f"{BACKEND_URL}/api/ask", json=payload)
         return response.json() if response.status_code == 200 else None
     except:
         return None
 
+
+# Get user IP using streamlit-js-eval
+ip = streamlit_js_eval(
+    js_expressions="fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => d.ip)",
+    key="get_ip"
+)
+
 # Initialize session state
 if 'location_data' not in st.session_state:
-    st.session_state.location_data = get_location_and_weather()
+    st.session_state.location_data = get_location_and_weather(ip)
 
 if 'conversation_history' not in st.session_state:
     st.session_state.conversation_history = []
@@ -105,13 +120,14 @@ if 'question_submitted' not in st.session_state:
 st.title("🌟 Daily Ritual AI")
 
 # Initialize location automatically using IP
-try:
-    requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip"})
-except:
-    pass
+if ip:
+    try:
+        requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip", "ip": ip})
+    except:
+        pass
 
 # Refresh location data
-st.session_state.location_data = get_location_and_weather()
+st.session_state.location_data = get_location_and_weather(ip)
     
 # Personalized greeting
 location = st.session_state.location_data
@@ -143,7 +159,7 @@ if st.session_state.show_initial_form:
                 st.session_state.show_initial_form = False
                 
                 with st.spinner("Creating your personalized ritual..."):
-                    result = get_recommendation(selected_mood, custom_mood)
+                    result = get_recommendation(selected_mood, custom_mood, ip=ip)
                     
                     if result:
                         st.session_state.conversation_history.append({
@@ -212,7 +228,7 @@ if not st.session_state.show_initial_form and st.session_state.conversation_hist
             if st.session_state.last_action != 'new_suggestion':
                 st.session_state.last_action = 'new_suggestion'
                 with st.spinner("Getting a fresh suggestion..."):
-                    result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood, force_new=True)
+                    result = get_recommendation(st.session_state.current_mood, st.session_state.current_mood, force_new=True, ip=ip)
                     if result:
                         st.session_state.conversation_history.append({
                             "type": "recommendation",

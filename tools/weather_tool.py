@@ -7,11 +7,11 @@ from strands.tools import tool
 from .location_tool import get_location
 
 @tool
-def get_weather() -> dict:
+def get_weather(ip: str = None) -> dict:
     """Get current weather for user's location using coordinates"""
     api_key = Config.OPENWEATHER_API_KEY
     
-    location_data = get_location()
+    location_data = get_location(ip)
     latitude = location_data["latitude"]
     longitude = location_data["longitude"]
     city = location_data["city"]
