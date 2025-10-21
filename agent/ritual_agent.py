@@ -117,10 +117,10 @@ def set_location():
     """Set user location via IP"""
     global current_location
     data = request.get_json() or {}
-    ip = data.get('ip')
+    ip = data.get('ip') or data.get('ip_address')
     location_data = get_location(ip)
-    current_location = {"method": "ip", "data": location_data}
-    print(f"[IP] Location set: {location_data['city']}, {location_data['country']}")
+    current_location = {"method": "ip", "data": location_data, "user_ip": ip}
+    print(f"[IP] Location set: {location_data['city']}, {location_data['country']} (IP: {ip})")
     return jsonify({"status": "success", "method": "ip", "location": location_data})
 
 @app.route('/location')
@@ -144,11 +144,19 @@ def recommend():
     force_new = data.get("force_new", False)
     ip = data.get("ip")
     
-    location_data = get_location(ip)
+    # Use stored location if available, otherwise get fresh location
+    if current_location["data"] and current_location.get("user_ip") == ip:
+        location_data = current_location["data"]
+    else:
+        location_data = get_location(ip)
+        current_location = {"method": "ip", "data": location_data, "user_ip": ip}
+    
     weather_data = get_weather(ip)
     
     location_str = f"{location_data['city']}, {location_data['country']}"
     weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
+    
+    print(f"[RECOMMEND] Using location: {location_str} for mood: {mood}")
     
     suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
     
