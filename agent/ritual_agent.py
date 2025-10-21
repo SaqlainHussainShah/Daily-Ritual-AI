@@ -98,23 +98,53 @@ class RitualAgent:
         else:
             return f"Enjoy your day in {location}! With {weather}, a balanced meal, light walk, or mindful break would be perfect."
 
-    def ask_direct_question(self, question: str) -> str:
-            try:            
-                prompt = f"""You are Daily Ritual AI, specializing in smart, context-aware food and drink suggestions that enhance daily wellness through adaptive AI insights.
-            
-                Question: {question}
-            
-                Use the get_location and get_weather tools if needed for context. Provide practical advice focusing on food, drinks, and wellness habits. Keep response encouraging and under 150 words."""
-            
-                if hasattr(self.agent, 'run'):
+    def ask_direct_question(self, question: str, location: str = None, weather: str = None) -> str:
+        """
+        Handle user follow-up questions about their ritual, considering location and weather.
+        Uses LLM if available; falls back to a simple rule-based reply otherwise.
+        """
+        prompt = f"""
+        You are Daily Ritual AI — an empathetic, wellness-focused assistant
+        that provides adaptive food, drink, and self-care guidance.
+
+        The user has a question about their daily ritual.
+
+        Question: {question}
+        Location: {location or 'Unknown'}
+        Weather: {weather or 'Unknown'}
+
+        Give a short, practical, and encouraging response (under 120 words)
+        that directly addresses the question — ideally including:
+        - A relevant food or drink idea
+        - A simple wellness or mindfulness tip
+        Keep the tone warm and human-like.
+        """
+
+        try:
+            if self.agent:
+                if hasattr(self.agent, "run"):
                     result = self.agent.run(prompt)
                 else:
                     result = str(self.agent(prompt))
                 return str(result)
-            
-            except Exception as e:
-                print(f"Error while calling LLM: {type(e).__name__}")            
-                return "Error while connecting to LLM."
+            else:
+                return self._fallback_question_response(question, location, weather)
+        except Exception as e:
+            print(f"[ask_direct_question] Error: {e}")
+            return self._fallback_question_response(question, location, weather)
+
+
+    def _fallback_question_response(self, question, location, weather):
+        """Fallback reply if LLM is unavailable."""
+        base = f"In {location or 'your area'}, with {weather or 'the current weather'}, "
+        if "rain" in question.lower():
+            return base + "you might enjoy a warm herbal tea and a cozy book indoors."
+        elif "energy" in question.lower():
+            return base + "try a smoothie with banana and oats to boost your energy naturally."
+        elif "stress" in question.lower() or "anxious" in question.lower():
+            return base + "deep breathing and a calming tea like chamomile could help."
+        else:
+            return base + "a balanced meal, hydration, and a short walk are always good choices."
 
 # Location storage
 current_location = {"method": "ip", "data": None}
@@ -206,14 +236,22 @@ def ask_question():
     data = request.get_json() or {}
     question = data.get("question", "")
     ip = data.get("ip")
-    
+
     if not question:
         return jsonify({"error": "Question is required"}), 400
-    
-    if ip:
-        get_location(ip)
-    
-    answer = ritual_agent.ask_direct_question(question)
+
+    # Use existing location if available, otherwise fallback
+    if current_location["data"] and current_location.get("user_ip") == ip:
+        location_data = current_location["data"]
+    else:
+        location_data = get_location(ip)
+        current_location.update({"data": location_data, "user_ip": ip})
+
+    weather_data = get_weather(ip)
+    location_str = f"{location_data['city']}, {location_data['country']}"
+    weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
+
+    answer = ritual_agent.ask_direct_question(question, location_str, weather_str)
     return jsonify({"answer": answer})
 
 if __name__ == '__main__':
