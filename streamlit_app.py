@@ -119,21 +119,25 @@ if 'question_submitted' not in st.session_state:
 # Main UI
 st.title("🌟 Daily Ritual AI")
 
-# Initialize location automatically using IP
+# Get real-time location data
 if ip:
     try:
-        requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip", "ip": ip})
+        # Set location in backend with user's IP
+        requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip", "ip_address": ip})
+        # Get fresh weather data
+        location_data = get_location_and_weather(ip)
     except:
-        pass
+        location_data = {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
+else:
+    location_data = {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
 
-# Refresh location data
-st.session_state.location_data = get_location_and_weather(ip)
+# Update session state with fresh data
+st.session_state.location_data = location_data
     
-# Personalized greeting
-location = st.session_state.location_data
-temp = location['temperature']
+# Personalized greeting with real-time data
+temp = location_data['temperature']
 temp_desc = "hot" if temp > 25 else "cold" if temp < 15 else "pleasant"
-city = location['city']
+city = location_data['city']
 
 st.markdown(f"### Hi there! It's {temp_desc} ({temp}°C) in {city}. How are you feeling today?")
 
