@@ -12,6 +12,9 @@ from config import Config
 from strands.models.bedrock import BedrockModel
 from tools.location_tool import get_location
 from tools.weather_tool import get_weather
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderServiceError
+import requests
 
 try:
     from strands import Agent
@@ -92,6 +95,51 @@ class RitualAgent:
             print(f"Error while calling LLM: {type(e).__name__}")            
             return "Error while connecting to LLM."
 
+# Location storage
+current_location = {"method": "ip", "data": None}
+
+def get_location_from_gps(latitude, longitude):
+    """Get location from GPS coordinates"""
+    try:
+        geolocator = Nominatim(user_agent="daily-ritual-ai")
+        location = geolocator.reverse((latitude, longitude), timeout=10)
+        
+        if location:
+            addr = location.raw.get("address", {})
+            city = addr.get("city") or addr.get("town") or addr.get("village") or "Unknown"
+            country = addr.get("country") or "Unknown"
+            
+            return {
+                "city": city,
+                "country": country,
+                "latitude": latitude,
+                "longitude": longitude
+            }
+    except Exception as e:
+        print(f"GPS geocoding error: {e}")
+    return None
+
+def get_location_from_ip():
+    """Get location from IP address"""
+    try:
+        ip_response = requests.get("https://api.ipify.org", timeout=5)
+        ip_address = ip_response.text.strip()
+        
+        location_response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=5)
+        if location_response.status_code == 200:
+            data = location_response.json()
+            if data["status"] == "success":
+                return {
+                    "city": data["city"],
+                    "country": data["country"],
+                    "latitude": data["lat"],
+                    "longitude": data["lon"]
+                }
+    except Exception as e:
+        print(f"IP location error: {e}")
+    
+    return {"city": "New York", "country": "United States", "latitude": 40.7128, "longitude": -74.0060}
+
 # Flask app setup
 from flask import Flask, jsonify, request
 
@@ -106,13 +154,68 @@ def root():
 def health():
     return jsonify({"status": "healthy"})
 
+@app.route('/set_location', methods=['POST'])
+def set_location():
+    """Set user location via GPS or IP"""
+    global current_location
+    data = request.get_json() or {}
+    method = data.get("method", "ip")
+    
+    if method == "gps":
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        if latitude and longitude:
+            location_data = get_location_from_gps(latitude, longitude)
+            if location_data:
+                current_location = {"method": "gps", "data": location_data}
+                print(f"[GPS] Location set: {location_data['city']}, {location_data['country']}")
+                return jsonify({"status": "success", "method": "gps", "location": location_data})
+    
+    # Fallback to IP
+    location_data = get_location_from_ip()
+    current_location = {"method": "ip", "data": location_data}
+    print(f"[IP] Location set: {location_data['city']}, {location_data['country']}")
+    return jsonify({"status": "success", "method": "ip", "location": location_data})
+
 @app.route('/location')
 def location():
-    return jsonify(get_location())
+    """Get current location"""
+    if current_location["data"]:
+        return jsonify(current_location["data"])
+    return jsonify(get_location_from_ip())
 
 @app.route('/weather')
 def weather():
-    return jsonify(get_weather())
+    """Get weather for current location"""
+    location_data = current_location["data"] if current_location["data"] else get_location_from_ip()
+    
+    try:
+        from config import Config
+        api_key = Config.OPENWEATHER_API_KEY
+        
+        if location_data.get("latitude") and location_data.get("longitude"):
+            url = f"http://api.openweathermap.org/data/2.5/weather?lat={location_data['latitude']}&lon={location_data['longitude']}&appid={api_key}&units=metric"
+        else:
+            url = f"http://api.openweathermap.org/data/2.5/weather?q={location_data['city']}&appid={api_key}&units=metric"
+        
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({
+                "temperature": data["main"]["temp"],
+                "condition": data["weather"][0]["description"],
+                "city": location_data["city"],
+                "country": location_data["country"]
+            })
+    except Exception as e:
+        print(f"Weather error: {e}")
+    
+    return jsonify({
+        "temperature": 22, 
+        "condition": "clear sky", 
+        "city": location_data.get("city", "Unknown"), 
+        "country": location_data.get("country", "Unknown")
+    })
 
 @app.route('/api/recommend', methods=['POST'])
 def recommend():
