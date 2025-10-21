@@ -119,20 +119,30 @@ if 'question_submitted' not in st.session_state:
 # Main UI
 st.title("🌟 Daily Ritual AI")
 
-# Get real-time location data
-if ip:
-    try:
-        # Set location in backend with user's IP
-        requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip", "ip_address": ip})
-        # Get fresh weather data
-        location_data = get_location_and_weather(ip)
-    except:
-        location_data = {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
-else:
-    location_data = {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
+# Get location data (only detect once per session)
+if 'location_detected' not in st.session_state:
+    st.session_state.location_detected = False
 
-# Update session state with fresh data
-st.session_state.location_data = location_data
+if not st.session_state.location_detected:
+    if ip:
+        with st.spinner("Detecting your location..."):
+            try:
+                # Set location in backend with user's IP
+                requests.post(f"{BACKEND_URL}/set_location", json={"method": "ip", "ip": ip})
+                # Get fresh weather data
+                location_data = get_location_and_weather(ip)
+                st.session_state.location_data = location_data
+                st.session_state.location_detected = True
+            except Exception as e:
+                st.error(f"Location error: {e}")
+                location_data = {"city": "New York", "country": "United States", "temperature": 22, "condition": "pleasant"}
+                st.session_state.location_data = location_data
+    else:
+        st.info("Detecting your IP address...")
+        st.stop()  # Stop execution until IP is available
+else:
+    # Use cached location data
+    location_data = st.session_state.location_data
     
 # Personalized greeting with real-time data
 temp = location_data['temperature']

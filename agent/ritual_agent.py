@@ -139,31 +139,44 @@ def weather():
 
 @app.route('/api/recommend', methods=['POST'])
 def recommend():
-    data = request.get_json() or {}
-    mood = data.get("mood", "neutral")
-    force_new = data.get("force_new", False)
-    ip = data.get("ip")
-    
-    # Use stored location if available, otherwise get fresh location
-    if current_location["data"] and current_location.get("user_ip") == ip:
-        location_data = current_location["data"]
-    else:
-        location_data = get_location(ip)
-        current_location = {"method": "ip", "data": location_data, "user_ip": ip}
-    
-    weather_data = get_weather(ip)
-    
-    location_str = f"{location_data['city']}, {location_data['country']}"
-    weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
-    
-    print(f"[RECOMMEND] Using location: {location_str} for mood: {mood}")
-    
-    suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
-    
-    return jsonify({
-        "ai_suggestion": suggestion,
-        "detected_location": {"city": location_data["city"], "country": location_data["country"]}
-    })
+    global current_location
+    try:
+        data = request.get_json() or {}
+        mood = data.get("mood", "neutral")
+        force_new = data.get("force_new", False)
+        ip = data.get("ip")
+        
+        print(f"[RECOMMEND] Request data: {data}")
+        
+        # Use stored location if available, otherwise get fresh location
+        if current_location["data"] and current_location.get("user_ip") == ip:
+            location_data = current_location["data"]
+        else:
+            location_data = get_location(ip)
+            current_location = {"method": "ip", "data": location_data, "user_ip": ip}
+        
+        weather_data = get_weather(ip)
+        
+        location_str = f"{location_data['city']}, {location_data['country']}"
+        weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
+        
+        print(f"[RECOMMEND] Using location: {location_str} for mood: {mood}")
+        
+        suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
+        
+        result = {
+            "ai_suggestion": suggestion,
+            "detected_location": {"city": location_data["city"], "country": location_data["country"]}
+        }
+        
+        print(f"[RECOMMEND] Result: {result}")
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[RECOMMEND] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/ask', methods=['POST'])
 def ask_question():
