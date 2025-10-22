@@ -156,6 +156,10 @@ cached_weather = {"data": None, "timestamp": 0}
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+# Trust the first proxy (Elastic Beanstalk / ALB)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 ritual_agent = RitualAgent()
 
 @app.route('/')
