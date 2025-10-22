@@ -276,8 +276,8 @@ def ask_question():
             except:
                 weather_data = {"temperature": 22, "condition": "clear sky"}
     else:
-        location_data = get_location(ip)
-        weather_data = get_weather(ip)
+        location_data = get_location()
+        weather_data = get_weather()
         current_location = {"method": "ip", "data": location_data, "user_ip": ip}
 
     location_str = f"{location_data['city']}, {location_data['country']}"
