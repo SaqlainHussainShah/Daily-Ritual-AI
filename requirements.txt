@@ -8,3 +8,4 @@ geopy==2.4.1
 streamlit-geolocation
 strands-agents==1.12.0
 litellm==1.78.0
+streamlit-js-eval

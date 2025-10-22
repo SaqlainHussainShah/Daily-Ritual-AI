@@ -12,8 +12,6 @@ from config import Config
 from strands.models.bedrock import BedrockModel
 from tools.location_tool import get_location
 from tools.weather_tool import get_weather
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderServiceError
 import requests
 
 try:
@@ -42,108 +40,126 @@ class RitualAgent:
             self.agent = None
     
     def generate_recommendation(self, mood, location, weather, force_new=False):
+        """
+        Generate a personalized wellness recommendation based on mood, location, and weather.
+        Uses cached results if available unless force_new=True.
+        """
         cache_key = f"{mood}_{location}_{weather}"
-        
-        if self.agent:
-            prompt = f"""You are Daily Ritual AI, delivering smart, context-aware food and drink suggestions to enhance daily wellness.
-            
-            User is feeling: {mood}
-            
-            Use the get_location and get_weather tools to get current context, then provide personalized recommendations focusing on:
-            - Smart food suggestions tailored to mood and weather
-            - Drink recommendations that complement the conditions
-            - Brief wellness activities that pair with the food/drinks
-            
-            Use adaptive AI insights to make suggestions feel contextually perfect. Keep response warm, encouraging, under 150 words."""
-            
-            try:
-                if hasattr(self.agent, 'run'):
+
+        # Use cache if available
+        if not force_new and cache_key in self.cache:
+            return self.cache[cache_key]
+
+        # Prepare the prompt with explicit context
+        prompt = f"""
+        You are Daily Ritual AI — an empathetic wellness assistant that provides 
+        personalized food, drink, and activity recommendations based on the user's mood,
+        location, and weather.
+
+        User mood: {mood}
+        User location: {location}
+        Current weather: {weather}
+
+        Now write a warm, encouraging response (under 150 words) that includes:
+        - A food suggestion suited to the mood and weather
+        - A drink recommendation that complements it
+        - A simple wellness or relaxation activity that fits the vibe
+
+        Keep the tone friendly, human, and context-aware.
+        """
+
+        try:
+            if self.agent:
+                if hasattr(self.agent, "run"):
                     result = self.agent.run(prompt)
                 else:
                     result = str(self.agent(prompt))
-                
-                self.cache[cache_key] = str(result)
-                return str(result)
-            except Exception as e:
-                print(f"AI error: {e}")
-        
-        # Fallback
-        if 'happy' in mood.lower():
-            return f"Great energy in {location}! With {weather}, try outdoor activities, energizing smoothie, or visit a local park."
-        elif 'tired' in mood.lower():
-            return f"Time to recharge in {location}. With {weather}, consider herbal tea, gentle stretching, or a cozy cafe."
-        elif 'stressed' in mood.lower():
-            return f"Find calm in {location}. With {weather}, try meditation, chamomile tea, or visit a peaceful library."
-        else:
-            return f"Nice day in {location}! With {weather}, a balanced meal, light walk, or local cafe visit sounds perfect."
-
-    def ask_direct_question(self, question: str) -> str:
-        try:            
-            prompt = f"""You are Daily Ritual AI, specializing in smart, context-aware food and drink suggestions that enhance daily wellness through adaptive AI insights.
-            
-            Question: {question}
-            
-            Use the get_location and get_weather tools if needed for context. Provide practical advice focusing on food, drinks, and wellness habits. Keep response encouraging and under 150 words."""
-            
-            if hasattr(self.agent, 'run'):
-                result = self.agent.run(prompt)
             else:
-                result = str(self.agent(prompt))
+                # fallback to non-agent mode
+                result = self._fallback_recommendation(mood, location, weather)
+
+            # Cache and return
+            self.cache[cache_key] = str(result)
             return str(result)
-            
+
         except Exception as e:
-            print(f"Error while calling LLM: {type(e).__name__}")            
-            return "Error while connecting to LLM."
+            print(f"[generate_recommendation] AI error: {e}")
+            return self._fallback_recommendation(mood, location, weather)
 
-# Location storage
+    def _fallback_recommendation(self, mood, location, weather):
+        """Local fallback recommendation if AI call fails."""
+        mood_lower = mood.lower()
+        if "happy" in mood_lower:
+            return f"Great energy in {location}! With {weather}, enjoy an energizing smoothie, outdoor walk, or a visit to a local park."
+        elif "tired" in mood_lower:
+            return f"Time to recharge in {location}. With {weather}, consider herbal tea, gentle stretching, or relaxing in a cozy café."
+        elif "stressed" in mood_lower:
+            return f"Find calm in {location}. With {weather}, try chamomile tea, deep breathing, or a quiet moment in a peaceful space."
+        else:
+            return f"Enjoy your day in {location}! With {weather}, a balanced meal, light walk, or mindful break would be perfect."
+
+    def ask_direct_question(self, question: str, location: str = None, weather: str = None) -> str:
+        """
+        Handle user follow-up questions about their ritual, considering location and weather.
+        Uses LLM if available; falls back to a simple rule-based reply otherwise.
+        """
+        prompt = f"""
+        You are Daily Ritual AI — an empathetic, wellness-focused assistant
+        that provides adaptive food, drink, and self-care guidance.
+
+        The user has a question about their daily ritual.
+
+        Question: {question}
+        Location: {location or 'Unknown'}
+        Weather: {weather or 'Unknown'}
+
+        Give a short, practical, and encouraging response (under 120 words)
+        that directly addresses the question — ideally including:
+        - A relevant food or drink idea
+        - A simple wellness or mindfulness tip
+        Keep the tone warm and human-like.
+        """
+
+        try:
+            if self.agent:
+                if hasattr(self.agent, "run"):
+                    result = self.agent.run(prompt)
+                else:
+                    result = str(self.agent(prompt))
+                return str(result)
+            else:
+                return self._fallback_question_response(question, location, weather)
+        except Exception as e:
+            print(f"[ask_direct_question] Error: {e}")
+            return self._fallback_question_response(question, location, weather)
+
+
+    def _fallback_question_response(self, question, location, weather):
+        """Fallback reply if LLM is unavailable."""
+        base = f"In {location or 'your area'}, with {weather or 'the current weather'}, "
+        if "rain" in question.lower():
+            return base + "you might enjoy a warm herbal tea and a cozy book indoors."
+        elif "energy" in question.lower():
+            return base + "try a smoothie with banana and oats to boost your energy naturally."
+        elif "stress" in question.lower() or "anxious" in question.lower():
+            return base + "deep breathing and a calming tea like chamomile could help."
+        else:
+            return base + "a balanced meal, hydration, and a short walk are always good choices."
+
+# Location and weather storage
 current_location = {"method": "ip", "data": None}
+cached_weather = {"data": None, "timestamp": 0}
 
-def get_location_from_gps(latitude, longitude):
-    """Get location from GPS coordinates"""
-    try:
-        geolocator = Nominatim(user_agent="daily-ritual-ai")
-        location = geolocator.reverse((latitude, longitude), timeout=10)
-        
-        if location:
-            addr = location.raw.get("address", {})
-            city = addr.get("city") or addr.get("town") or addr.get("village") or "Unknown"
-            country = addr.get("country") or "Unknown"
-            
-            return {
-                "city": city,
-                "country": country,
-                "latitude": latitude,
-                "longitude": longitude
-            }
-    except Exception as e:
-        print(f"GPS geocoding error: {e}")
-    return None
 
-def get_location_from_ip():
-    """Get location from IP address"""
-    try:
-        ip_response = requests.get("https://api.ipify.org", timeout=5)
-        ip_address = ip_response.text.strip()
-        
-        location_response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=5)
-        if location_response.status_code == 200:
-            data = location_response.json()
-            if data["status"] == "success":
-                return {
-                    "city": data["city"],
-                    "country": data["country"],
-                    "latitude": data["lat"],
-                    "longitude": data["lon"]
-                }
-    except Exception as e:
-        print(f"IP location error: {e}")
-    
-    return {"city": "New York", "country": "United States", "latitude": 40.7128, "longitude": -74.0060}
 
 # Flask app setup
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+# Trust the first proxy (Elastic Beanstalk / ALB)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 ritual_agent = RitualAgent()
 
 @app.route('/')
@@ -156,95 +172,124 @@ def health():
 
 @app.route('/set_location', methods=['POST'])
 def set_location():
-    """Set user location via GPS or IP"""
+    """Set user location via IP"""
     global current_location
     data = request.get_json() or {}
-    method = data.get("method", "ip")
-    
-    if method == "gps":
-        latitude = data.get("latitude")
-        longitude = data.get("longitude")
-        if latitude and longitude:
-            location_data = get_location_from_gps(latitude, longitude)
-            if location_data:
-                current_location = {"method": "gps", "data": location_data}
-                print(f"[GPS] Location set: {location_data['city']}, {location_data['country']}")
-                return jsonify({"status": "success", "method": "gps", "location": location_data})
-    
-    # Fallback to IP
-    location_data = get_location_from_ip()
-    current_location = {"method": "ip", "data": location_data}
-    print(f"[IP] Location set: {location_data['city']}, {location_data['country']}")
+    ip = data.get('ip') or data.get('ip_address')
+    location_data = get_location(ip)
+    current_location = {"method": "ip", "data": location_data, "user_ip": ip}
+    print(f"[IP] Location set: {location_data['city']}, {location_data['country']} (IP: {ip})")
     return jsonify({"status": "success", "method": "ip", "location": location_data})
 
 @app.route('/location')
 def location():
     """Get current location"""
+    ip = request.args.get('ip')
     if current_location["data"]:
         return jsonify(current_location["data"])
-    return jsonify(get_location_from_ip())
+    return jsonify(get_location(ip))
 
 @app.route('/weather')
 def weather():
     """Get weather for current location"""
-    location_data = current_location["data"] if current_location["data"] else get_location_from_ip()
-    
-    try:
-        from config import Config
-        api_key = Config.OPENWEATHER_API_KEY
-        
-        if location_data.get("latitude") and location_data.get("longitude"):
-            url = f"http://api.openweathermap.org/data/2.5/weather?lat={location_data['latitude']}&lon={location_data['longitude']}&appid={api_key}&units=metric"
-        else:
-            url = f"http://api.openweathermap.org/data/2.5/weather?q={location_data['city']}&appid={api_key}&units=metric"
-        
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return jsonify({
-                "temperature": data["main"]["temp"],
-                "condition": data["weather"][0]["description"],
-                "city": location_data["city"],
-                "country": location_data["country"]
-            })
-    except Exception as e:
-        print(f"Weather error: {e}")
-    
-    return jsonify({
-        "temperature": 22, 
-        "condition": "clear sky", 
-        "city": location_data.get("city", "Unknown"), 
-        "country": location_data.get("country", "Unknown")
-    })
+    ip = request.args.get('ip')
+    return jsonify(get_weather(ip))
 
 @app.route('/api/recommend', methods=['POST'])
 def recommend():
-    data = request.get_json() or {}
-    mood = data.get("mood", "neutral")
-    force_new = data.get("force_new", False)
-    
-    location_data = get_location()
-    weather_data = get_weather()
-    
-    location_str = f"{location_data['city']}, {location_data['country']}"
-    weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
-    
-    suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
-    
-    return jsonify({
-        "ai_suggestion": suggestion,
-        "detected_location": {"city": location_data["city"], "country": location_data["country"]}
-    })
+    global current_location
+    try:
+        data = request.get_json() or {}
+        mood = data.get("mood", "neutral")
+        force_new = data.get("force_new", False)
+        ip = data.get("ip")
+        
+        print(f"[RECOMMEND] Request data: {data}")
+        
+        # Use stored location if available, otherwise get fresh location
+        if current_location["data"] and current_location.get("user_ip") == ip:
+            location_data = current_location["data"]
+        else:
+            location_data = get_location(ip)
+            current_location = {"method": "ip", "data": location_data, "user_ip": ip}
+        
+        weather_data = get_weather(ip)
+        
+        location_str = f"{location_data['city']}, {location_data['country']}"
+        weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
+        
+        print(f"[RECOMMEND] Using location: {location_str} for mood: {mood}")
+        
+        suggestion = ritual_agent.generate_recommendation(mood, location_str, weather_str, force_new)
+        
+        result = {
+            "ai_suggestion": suggestion,
+            "detected_location": {"city": location_data["city"], "country": location_data["country"]}
+        }
+        
+        print(f"[RECOMMEND] Result: {result}")
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[RECOMMEND] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/ask', methods=['POST'])
 def ask_question():
+    global current_location
     data = request.get_json() or {}
     question = data.get("question", "")
-    
+    ip = data.get("ip")
+
     if not question:
         return jsonify({"error": "Question is required"}), 400
+
+    # Use stored location data to maintain consistency
+    if current_location["data"] and current_location.get("user_ip") == ip:
+        location_data = current_location["data"]
+        
+        # Use cached weather if available (cache for 10 minutes)
+        import time
+        current_time = time.time()
+        if cached_weather["data"] and (current_time - cached_weather["timestamp"]) < 600:
+            weather_data = cached_weather["data"]
+            print(f"[ASK] Using cached weather data")
+        else:
+            # Get fresh weather data
+            try:
+                api_key = Config.OPENWEATHER_API_KEY
+                if location_data.get("latitude") and location_data.get("longitude"):
+                    url = f"http://api.openweathermap.org/data/2.5/weather?lat={location_data['latitude']}&lon={location_data['longitude']}&appid={api_key}&units=metric"
+                else:
+                    url = f"http://api.openweathermap.org/data/2.5/weather?q={location_data['city']}&appid={api_key}&units=metric"
+                
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    weather_json = response.json()
+                    weather_data = {
+                        "temperature": round(weather_json["main"]["temp"], 1),
+                        "condition": weather_json["weather"][0]["description"]
+                    }
+                    # Cache the weather data
+                    cached_weather = {"data": weather_data, "timestamp": current_time}
+                    print(f"[ASK] Fetched fresh weather data")
+                else:
+                    weather_data = {"temperature": 22, "condition": "clear sky"}
+            except:
+                weather_data = {"temperature": 22, "condition": "clear sky"}
+    else:
+        location_data = get_location()
+        weather_data = get_weather()
+        current_location = {"method": "ip", "data": location_data, "user_ip": ip}
+
+    location_str = f"{location_data['city']}, {location_data['country']}"
+    weather_str = f"{weather_data['temperature']}°C, {weather_data['condition']}"
+
+    print(f"[ASK] Using location: {location_str} for question: {question}")
     
-    answer = ritual_agent.ask_direct_question(question)
+    answer = ritual_agent.ask_direct_question(question, location_str, weather_str)
     return jsonify({"answer": answer})
 
 if __name__ == '__main__':
